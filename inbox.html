@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b3a5c">
+<title>Mayditch — Inbox</title>
+<style>
+  :root { --blue:#1b3a5c; --ink:#152029; --muted:#6b7c88; --bg:#f4f6f8; --card:#fff; --line:#e2e7ec; --amber:#c47a13; --green:#1f6f54; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); padding:0 0 40px; }
+  header { background:var(--blue); color:#fff; padding:18px 18px calc(18px + env(safe-area-inset-top)); display:flex; justify-content:space-between; align-items:center; }
+  header h1 { margin:0; font-size:19px; }
+  .badge { background:#fff; color:var(--blue); border-radius:20px; padding:4px 12px; font-weight:700; font-size:14px; }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  .bar { display:flex; gap:8px; margin-bottom:12px; }
+  .bar button { flex:1; border:0; border-radius:10px; padding:11px; font:600 14px inherit; background:#e6ebef; color:var(--muted); }
+  .bar button.on { background:var(--blue); color:#fff; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:12px 0; }
+  .meta { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted); margin-bottom:6px; }
+  .pill { padding:2px 9px; border-radius:20px; font-weight:600; font-size:11px; }
+  .pill.post { background:#eaf3ef; color:var(--green); }
+  .pill.checklist { background:#fff3df; color:var(--amber); }
+  .note { font-size:15px; margin:2px 0 10px; white-space:pre-wrap; }
+  .thumb { width:100%; border-radius:10px; display:block; background:#eef1f4; min-height:60px; }
+  .done { width:100%; border:0; border-radius:10px; padding:12px; font:600 15px inherit; color:#fff; background:var(--green); margin-top:10px; }
+  .status-done { color:var(--green); font-weight:600; font-size:13px; margin-top:8px; }
+  .refresh { width:100%; border:1px solid var(--line); background:#fff; border-radius:12px; padding:13px; font:600 15px inherit; color:var(--blue); }
+  .empty { text-align:center; color:var(--muted); padding:40px 0; }
+  .gate { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:24px; }
+  .gate .card { max-width:360px; width:100%; }
+  .gate input { width:100%; border:1px solid var(--line); border-radius:10px; padding:12px; font:inherit; }
+  .gate button { width:100%; border:0; border-radius:12px; padding:14px; font:600 16px inherit; color:#fff; background:var(--blue); margin-top:12px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .hide { display:none; }
+  h2 { font-size:16px; margin:0 0 8px; }
+</style>
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="card">
+    <h2>Mayditch — Inbox</h2>
+    <p class="muted">Enter your access code. Once per device.</p>
+    <input type="text" id="codeInput" placeholder="Access code" autocomplete="off">
+    <button onclick="saveCode()">Open inbox</button>
+  </div>
+</div>
+
+<header class="hide" id="hdr">
+  <h1>Mayditch — Inbox</h1>
+  <span class="badge" id="badge">0 open</span>
+</header>
+
+<main class="hide" id="mainApp">
+  <div class="bar">
+    <button class="on" id="fOpen" onclick="setFilter('open')">Open</button>
+    <button id="fAll" onclick="setFilter('all')">All</button>
+  </div>
+  <button class="refresh" onclick="load()">↻ Refresh</button>
+  <div id="list"></div>
+</main>
+
+<script>
+const ENDPOINT = 'https://script.google.com/macros/s/AKfycbx7Or57ifQW5hjwgw-ZZAW-I1kNhRibOvZyusJuAmYwho8YWqx81Yyv7380oR9dnhs/exec';
+let CODE = localStorage.getItem('mw_code') || '';
+let FILTER = 'open';
+let TASKS = [];
+
+function boot(){ if(CODE){ document.getElementById('gate').classList.add('hide'); document.getElementById('hdr').classList.remove('hide'); document.getElementById('mainApp').classList.remove('hide'); load(); } }
+function saveCode(){ const v=document.getElementById('codeInput').value.trim(); if(!v) return; CODE=v; localStorage.setItem('mw_code',v); boot(); }
+function setFilter(f){ FILTER=f; document.getElementById('fOpen').classList.toggle('on',f==='open'); document.getElementById('fAll').classList.toggle('on',f==='all'); render(); }
+function fmt(d){ try{ return new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return d; } }
+
+async function load(){
+  document.getElementById('list').innerHTML='<div class="empty">Loading…</div>';
+  try{
+    const r=await fetch(ENDPOINT+'?token='+encodeURIComponent(CODE)+'&action=feed');
+    const res=await r.json();
+    if(!res.ok){ document.getElementById('list').innerHTML='<div class="empty">'+(res.error==='unauthorized'?'Wrong access code.':'Error loading.')+'</div>'; return; }
+    TASKS=res.tasks||[]; render();
+  }catch(e){ document.getElementById('list').innerHTML='<div class="empty">No connection. Tap Refresh.</div>'; }
+}
+
+function render(){
+  const open=TASKS.filter(t=>t.status!=='done').length;
+  document.getElementById('badge').textContent=open+' open';
+  const show=FILTER==='open'?TASKS.filter(t=>t.status!=='done'):TASKS;
+  const list=document.getElementById('list');
+  if(!show.length){ list.innerHTML='<div class="empty">'+(FILTER==='open'?'Nothing open. All clear.':'Nothing yet.')+'</div>'; return; }
+  list.innerHTML='';
+  show.forEach(t=>{
+    const c=document.createElement('div'); c.className='card';
+    let html='<div class="meta"><span class="pill '+(t.type==='post'?'post':'checklist')+'">'+(t.type==='post'?'POST':'CHECK')+'</span><span>'+t.source+'</span><span>·</span><span>'+fmt(t.created)+'</span></div>';
+    html+='<div class="note">'+(t.note||'(no note)')+'</div>';
+    if(t.photoId){ html+='<img class="thumb" data-pid="'+t.photoId+'" alt="post photo">'; }
+    if(t.status==='done'){ html+='<div class="status-done">✓ Done</div>'; }
+    else { html+='<button class="done" data-id="'+t.id+'">Mark done</button>'; }
+    c.innerHTML=html; list.appendChild(c);
+    const b=c.querySelector('button.done'); if(b) b.onclick=()=>markDone(t.id,b);
+    const img=c.querySelector('img.thumb'); if(img) loadPhoto(img,t.photoId);
+  });
+}
+
+async function loadPhoto(img,pid){
+  try{ const r=await fetch(ENDPOINT+'?token='+encodeURIComponent(CODE)+'&action=photo&id='+encodeURIComponent(pid));
+    const res=await r.json(); if(res.ok) img.src=res.dataUrl; }catch(e){}
+}
+
+async function markDone(id,btn){
+  btn.disabled=true; btn.textContent='…';
+  try{ const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:CODE,action:'complete',id:id})});
+    const res=await r.json();
+    if(res.ok){ const t=TASKS.find(x=>x.id===id); if(t) t.status='done'; render(); }
+    else { btn.disabled=false; btn.textContent='Mark done'; } }
+  catch(e){ btn.disabled=false; btn.textContent='Mark done'; }
+}
+
+boot();
+</script>
+</body>
+</html>
