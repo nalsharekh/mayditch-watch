@@ -24,6 +24,7 @@
   .pill.leak { background:#f8e7e7; color:var(--red); }
   .pill.checklist { background:#fff3df; color:var(--amber); }
   .pill.other,.pill.post { background:#ececf0; color:var(--muted); }
+  .pill.whatsapp { background:#ede7f6; color:#5e35b1; }
   .note { font-size:15px; margin:2px 0 10px; white-space:pre-wrap; }
   .thumb { width:100%; border-radius:10px; display:block; background:#eef1f4; min-height:60px; }
   .ack { width:100%; border:0; border-radius:10px; padding:13px; font:600 15px inherit; color:#fff; background:var(--blue); margin-top:10px; }
@@ -56,7 +57,7 @@
 
 <script>
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbx7Or57ifQW5hjwgw-ZZAW-I1kNhRibOvZyusJuAmYwho8YWqx81Yyv7380oR9dnhs/exec';
-const LABELS = { bill:'BILL / LETTER', parcel:'PARCEL', leak:'LEAK / DAMAGE', checklist:'WEEKLY CHECK', other:'OTHER', post:'POST' };
+const LABELS = { bill:'BILL / LETTER', parcel:'PARCEL', leak:'LEAK / DAMAGE', checklist:'WEEKLY CHECK', whatsapp:'WAITING REPLY', other:'OTHER', post:'POST' };
 let CODE = localStorage.getItem('mw_code_admin') || '';
 let FILTER='open', TASKS=[];
 
@@ -73,9 +74,11 @@ async function load(){
   }catch(e){ document.getElementById('list').innerHTML='<div class="empty">No connection. Tap Refresh.</div>'; }
 }
 function render(){
-  const open=TASKS.filter(t=>t.status!=='done').length;
+  const cutoff=Date.now()-24*3600*1000;
+  const VIS=TASKS.filter(t=>!(t.status==='done' && t.completed && new Date(t.completed).getTime()<cutoff));
+  const open=VIS.filter(t=>t.status!=='done').length;
   document.getElementById('badge').textContent=open+' to ack';
-  const show=FILTER==='open'?TASKS.filter(t=>t.status!=='done'):TASKS;
+  const show=FILTER==='open'?VIS.filter(t=>t.status!=='done'):VIS;
   const list=document.getElementById('list');
   if(!show.length){ list.innerHTML='<div class="empty">'+(FILTER==='open'?'Nothing to acknowledge. All clear.':'Nothing yet.')+'</div>'; return; }
   list.innerHTML='';
